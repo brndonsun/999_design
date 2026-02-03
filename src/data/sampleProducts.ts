@@ -514,17 +514,95 @@ export const sampleProducts: Product[] = [
 ];
 
 // Get products filtered by room type, style, and budget
+// Returns a curated selection that aims to use the budget well
 export function getRecommendedProducts(
   roomType: string,
   style: string,
   maxBudget: number
 ): Product[] {
-  return sampleProducts.filter((product) => {
+  // Get all matching products
+  const allMatching = sampleProducts.filter((product) => {
     const matchesRoom = product.roomTypes.includes(roomType as any);
     const matchesStyle = product.styles.includes(style as any);
-    const withinBudget = maxBudget === 0 || product.price <= maxBudget;
-    return matchesRoom && matchesStyle && withinBudget;
+    return matchesRoom && matchesStyle;
   });
+
+  // Define essential categories per room type
+  const essentialCategories: Record<string, string[]> = {
+    bedroom: ['bed', 'nightstand', 'dresser', 'lighting', 'rug', 'chair'],
+    living_room: ['sofa', 'table', 'chair', 'lighting', 'rug', 'storage', 'bookshelf'],
+    office: ['desk', 'chair', 'bookshelf', 'lighting', 'storage'],
+    den: ['sofa', 'chair', 'table', 'lighting', 'rug', 'storage'],
+    dining_room: ['table', 'chair', 'lighting', 'storage', 'rug'],
+    kitchen: ['table', 'chair', 'lighting', 'storage'],
+  };
+
+  const categories = essentialCategories[roomType] || ['sofa', 'chair', 'table', 'lighting'];
+  const selected: Product[] = [];
+  const usedIds = new Set<string>();
+  let totalSpent = 0;
+
+  // First pass: get one item from each essential category
+  for (const category of categories) {
+    const inCategory = allMatching.filter(
+      (p) => p.category === category && !usedIds.has(p.id)
+    );
+
+    if (inCategory.length > 0) {
+      // Sort by price descending to prefer higher quality items
+      const sorted = inCategory.sort((a, b) => b.price - a.price);
+
+      // Find the best item that fits the remaining budget
+      const remaining = maxBudget === 0 ? Infinity : maxBudget - totalSpent;
+      const fits = sorted.filter((p) => p.price <= remaining);
+
+      if (fits.length > 0) {
+        const pick = fits[0];
+        selected.push(pick);
+        usedIds.add(pick.id);
+        totalSpent += pick.price;
+      }
+    }
+  }
+
+  // Second pass: add more items if budget allows (aim for 60%+ budget usage)
+  const targetSpend = maxBudget === 0 ? Infinity : maxBudget * 0.6;
+
+  if (totalSpent < targetSpend) {
+    // Add secondary items from any category
+    const remaining = allMatching
+      .filter((p) => !usedIds.has(p.id))
+      .sort((a, b) => b.price - a.price);
+
+    for (const product of remaining) {
+      if (totalSpent >= targetSpend) break;
+
+      const budgetRemaining = maxBudget === 0 ? Infinity : maxBudget - totalSpent;
+      if (product.price <= budgetRemaining) {
+        selected.push(product);
+        usedIds.add(product.id);
+        totalSpent += product.price;
+      }
+    }
+  }
+
+  // Add nightstands in pairs for bedroom
+  if (roomType === 'bedroom') {
+    const nightstands = selected.filter((p) => p.category === 'nightstand');
+    if (nightstands.length === 1) {
+      const another = allMatching.find(
+        (p) => p.category === 'nightstand' && !usedIds.has(p.id) &&
+        (maxBudget === 0 || p.price <= maxBudget - totalSpent)
+      );
+      if (another) {
+        selected.push(another);
+        usedIds.add(another.id);
+        totalSpent += another.price;
+      }
+    }
+  }
+
+  return selected;
 }
 
 // Get alternative products for a given product

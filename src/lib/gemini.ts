@@ -30,10 +30,18 @@ export async function analyzeRoomWithGemini(
     throw new Error('GEMINI_API_KEY is not configured');
   }
 
-  const prompt = `You are an expert interior designer. Analyze this room photo and provide recommendations.
+  const prompt = `You are an expert interior designer. Analyze this room photo and provide COMPREHENSIVE furniture recommendations to fully furnish the room.
 
 ${userPreferences?.style ? `User's preferred style: ${userPreferences.style}` : ''}
-${userPreferences?.budget ? `User's budget: $${userPreferences.budget}` : ''}
+${userPreferences?.budget ? `User's budget: $${userPreferences.budget} - AIM TO USE MOST OF THIS BUDGET with quality furniture pieces.` : ''}
+
+IMPORTANT: Suggest 8-12 furniture pieces to create a complete, well-furnished room. Include:
+- Primary furniture (bed/sofa/desk depending on room type)
+- Secondary furniture (nightstands, side tables, coffee tables)
+- Storage (dressers, bookshelves, storage units)
+- Seating (chairs, accent chairs)
+- Lighting (floor lamps, table lamps)
+- Rugs and decor items
 
 Analyze the image and respond with ONLY valid JSON (no markdown, no code blocks) in this exact format:
 {
@@ -53,7 +61,9 @@ Analyze the image and respond with ONLY valid JSON (no markdown, no code blocks)
   ],
   "colorPalette": ["hex colors that would complement the room"],
   "overallAssessment": "Brief 2-3 sentence assessment of the room and design direction"
-}`;
+}
+
+Remember: Suggest 8-12 items to fully furnish the space!`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -167,29 +177,72 @@ export function matchFurnitureToSuggestions(
   style: DesignStyle
 ): Product[] {
   const matched: Product[] = [];
+  const usedIds = new Set<string>();
+  let totalSpent = 0;
+  const remainingBudget = () => budget === 0 ? Infinity : budget - totalSpent;
 
-  for (const suggestion of suggestions) {
+  // Sort suggestions by priority (high first)
+  const sortedSuggestions = [...suggestions].sort((a, b) => {
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    return priorityOrder[a.priority] - priorityOrder[b.priority];
+  });
+
+  for (const suggestion of sortedSuggestions) {
     // Find products matching the suggested category
     const categoryMatches = products.filter(
       (p) =>
         p.category === suggestion.category &&
-        (budget === 0 || p.price <= budget / suggestions.length) &&
+        !usedIds.has(p.id) &&
+        (budget === 0 || p.price <= remainingBudget()) &&
         p.styles.includes(style)
     );
 
     if (categoryMatches.length > 0) {
-      // Sort by price and pick the best match
+      // Sort by style match first, then prefer mid-to-higher price range to use budget
       const sorted = categoryMatches.sort((a, b) => {
-        // Prefer products that match more styles
-        const aStyleMatch = a.styles.filter((s) => s === style).length;
-        const bStyleMatch = b.styles.filter((s) => s === style).length;
+        // Prefer products that match the style
+        const aStyleMatch = a.styles.includes(style) ? 1 : 0;
+        const bStyleMatch = b.styles.includes(style) ? 1 : 0;
         if (aStyleMatch !== bStyleMatch) return bStyleMatch - aStyleMatch;
 
-        // Then by price (mid-range preferred)
-        return a.price - b.price;
+        // Then prefer higher priced items (better quality) while staying in budget
+        return b.price - a.price;
       });
 
-      matched.push(sorted[0]);
+      const selected = sorted[0];
+      matched.push(selected);
+      usedIds.add(selected.id);
+      totalSpent += selected.price;
+    }
+  }
+
+  // If we haven't used much of the budget, add more items
+  // Target: use at least 60% of budget
+  const targetSpend = budget === 0 ? Infinity : budget * 0.6;
+
+  if (totalSpent < targetSpend) {
+    // Get categories we might want to add more of
+    const additionalCategories = ['lighting', 'chair', 'storage', 'rug', 'nightstand', 'bookshelf'];
+
+    for (const category of additionalCategories) {
+      if (totalSpent >= targetSpend) break;
+
+      const availableInCategory = products.filter(
+        (p) =>
+          p.category === category &&
+          !usedIds.has(p.id) &&
+          (budget === 0 || p.price <= remainingBudget()) &&
+          p.styles.includes(style)
+      );
+
+      if (availableInCategory.length > 0) {
+        // Pick the best priced item that fits
+        const sorted = availableInCategory.sort((a, b) => b.price - a.price);
+        const toAdd = sorted[0];
+        matched.push(toAdd);
+        usedIds.add(toAdd.id);
+        totalSpent += toAdd.price;
+      }
     }
   }
 
