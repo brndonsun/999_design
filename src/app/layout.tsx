@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Interior Design Studio - AI-Powered Room Design',
-  description: 'Get customized interior designs and furniture selections from IKEA, Amazon, and Wayfair. Design your perfect room with our AI-powered tool.',
+  title: 'Ave999Designs - Your AI interior design tool',
+  description: 'Get customized interior designs and furniture selections from IKEA, Amazon, and Wayfair. Design your perfect room with Ave999Designs.',
 };
 
 export default function RootLayout({

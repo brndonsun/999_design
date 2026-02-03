@@ -82,7 +82,7 @@ Analyze the image and respond with ONLY valid JSON (no markdown, no code blocks)
           temperature: 0.4,
           topK: 32,
           topP: 1,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 4096,
         },
       }),
     }
@@ -96,10 +96,17 @@ Analyze the image and respond with ONLY valid JSON (no markdown, no code blocks)
 
   const data = await response.json();
 
-  const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const candidate = data.candidates?.[0];
+  const textContent = candidate?.content?.parts?.[0]?.text;
+  const finishReason = candidate?.finishReason;
 
   if (!textContent) {
     throw new Error('No response from Gemini');
+  }
+
+  // Check if response was truncated
+  if (finishReason === 'MAX_TOKENS') {
+    console.warn('Gemini response was truncated due to max tokens');
   }
 
   // Parse JSON from response (handle potential markdown code blocks)
@@ -110,11 +117,46 @@ Analyze the image and respond with ONLY valid JSON (no markdown, no code blocks)
     jsonStr = textContent.split('```')[1].split('```')[0];
   }
 
+  // Try to extract JSON object if there's extra text
+  const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    jsonStr = jsonMatch[0];
+  }
+
   try {
     return JSON.parse(jsonStr.trim());
   } catch (e) {
-    console.error('Failed to parse Gemini response:', textContent);
-    throw new Error('Failed to parse AI response');
+    // If JSON is truncated, try to repair it by closing unclosed strings and brackets
+    console.error('Failed to parse Gemini response, attempting repair:', textContent);
+
+    let repairedJson = jsonStr.trim();
+
+    // Check if we're in the middle of a string (odd number of unescaped quotes)
+    const quoteCount = (repairedJson.match(/(?<!\\)"/g) || []).length;
+    if (quoteCount % 2 !== 0) {
+      repairedJson += '"';
+    }
+
+    // Count and close unclosed brackets
+    const openBraces = (repairedJson.match(/\{/g) || []).length;
+    const closeBraces = (repairedJson.match(/\}/g) || []).length;
+    const openBrackets = (repairedJson.match(/\[/g) || []).length;
+    const closeBrackets = (repairedJson.match(/\]/g) || []).length;
+
+    // Close arrays first, then objects
+    for (let i = 0; i < openBrackets - closeBrackets; i++) {
+      repairedJson += ']';
+    }
+    for (let i = 0; i < openBraces - closeBraces; i++) {
+      repairedJson += '}';
+    }
+
+    try {
+      return JSON.parse(repairedJson);
+    } catch (e2) {
+      console.error('JSON repair failed:', repairedJson);
+      throw new Error('Failed to parse AI response');
+    }
   }
 }
 

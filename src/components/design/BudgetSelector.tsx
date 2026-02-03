@@ -63,17 +63,17 @@ export default function BudgetSelector() {
       {isCustom && (
         <div className="pt-2 animate-slide-up">
           <Slider
-            min={500}
-            max={25000}
-            step={500}
+            min={250}
+            max={5000}
+            step={250}
             value={roomConfig.budget}
             onChange={handleCustomChange}
             formatValue={(v) => formatPrice(v)}
             showValue
           />
           <div className="flex justify-between text-xs text-slate-400 mt-1">
-            <span>$500</span>
-            <span>$25,000</span>
+            <span>$250</span>
+            <span>$5,000</span>
           </div>
         </div>
       )}

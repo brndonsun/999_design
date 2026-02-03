@@ -14,8 +14,8 @@ export default function Header() {
               <Sparkles className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">RoomCraft</h1>
-              <p className="text-xs text-slate-500">AI Interior Design</p>
+              <h1 className="text-xl font-bold text-slate-900">Ave999Designs</h1>
+              <p className="text-xs text-slate-500">Your AI interior design tool</p>
             </div>
           </div>
 

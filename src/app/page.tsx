@@ -129,47 +129,148 @@ export default function Home() {
     const roomWidth = dims.width * 30;
     const roomLength = dims.length * 30;
 
+    // Track placed items for collision detection
+    const placedItems: { x: number; y: number; width: number; height: number }[] = [];
+
+    // Check if a position overlaps with any placed item
+    const checkOverlap = (x: number, y: number, width: number, height: number): boolean => {
+      const padding = 10; // Minimum gap between items
+      for (const item of placedItems) {
+        if (
+          x < item.x + item.width + padding &&
+          x + width + padding > item.x &&
+          y < item.y + item.height + padding &&
+          y + height + padding > item.y
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Find a non-overlapping position, starting from preferred position
+    const findValidPosition = (
+      preferredX: number,
+      preferredY: number,
+      width: number,
+      height: number
+    ): { x: number; y: number } => {
+      // Try preferred position first
+      if (!checkOverlap(preferredX, preferredY, width, height)) {
+        return { x: preferredX, y: preferredY };
+      }
+
+      // Search in expanding squares around preferred position
+      const step = 30;
+      for (let radius = step; radius < Math.max(roomWidth, roomLength); radius += step) {
+        // Try positions around the perimeter at this radius
+        for (let dx = -radius; dx <= radius; dx += step) {
+          for (let dy = -radius; dy <= radius; dy += step) {
+            // Only check perimeter positions
+            if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+
+            const testX = Math.max(10, Math.min(preferredX + dx, roomWidth - width - 10));
+            const testY = Math.max(10, Math.min(preferredY + dy, roomLength - height - 10));
+
+            if (!checkOverlap(testX, testY, width, height)) {
+              return { x: testX, y: testY };
+            }
+          }
+        }
+      }
+
+      // Fallback: grid search
+      for (let gx = 10; gx < roomWidth - width - 10; gx += step) {
+        for (let gy = 10; gy < roomLength - height - 10; gy += step) {
+          if (!checkOverlap(gx, gy, width, height)) {
+            return { x: gx, y: gy };
+          }
+        }
+      }
+
+      // Last resort: return preferred position (will overlap)
+      return { x: preferredX, y: preferredY };
+    };
+
+    // Track category counts to offset items of the same type
+    const categoryCount: Record<string, number> = {};
+
     const furnitureItems: FurnitureItem[] = products.slice(0, 8).map((product, index) => {
       const productWidth = inchesToPixels(product.width);
       const productDepth = inchesToPixels(product.depth);
 
-      let x = 0;
-      let y = 0;
+      // Get and increment the count for this category
+      const catIndex = categoryCount[product.category] || 0;
+      categoryCount[product.category] = catIndex + 1;
+
+      let preferredX = 0;
+      let preferredY = 0;
 
       switch (product.category) {
         case 'bed':
-          x = (roomWidth - productWidth) / 2;
-          y = 20;
+          preferredX = (roomWidth - productWidth) / 2;
+          preferredY = 20;
           break;
         case 'sofa':
-          x = (roomWidth - productWidth) / 2;
-          y = roomLength - productDepth - 30;
+          preferredX = (roomWidth - productWidth) / 2;
+          preferredY = roomLength - productDepth - 30;
           break;
         case 'desk':
+          preferredX = 20;
+          preferredY = 20;
+          break;
         case 'dresser':
-          x = 20;
-          y = 20 + index * 80;
+          preferredX = 20;
+          preferredY = roomLength / 2;
           break;
         case 'nightstand':
-          x = index % 2 === 0 ? 20 : roomWidth - productWidth - 20;
-          y = 100;
+          preferredX = catIndex % 2 === 0 ? 20 : roomWidth - productWidth - 20;
+          preferredY = 20;
           break;
         case 'chair':
-          x = roomWidth - productWidth - 40;
-          y = 60 + index * 60;
+          preferredX = roomWidth - productWidth - 40;
+          preferredY = 60;
           break;
         case 'table':
-          x = (roomWidth - productWidth) / 2;
-          y = (roomLength - productDepth) / 2;
+          preferredX = (roomWidth - productWidth) / 2;
+          preferredY = (roomLength - productDepth) / 2;
           break;
         case 'rug':
-          x = (roomWidth - productWidth) / 2;
-          y = (roomLength - productDepth) / 2;
+          preferredX = (roomWidth - productWidth) / 2;
+          preferredY = (roomLength - productDepth) / 2;
+          break;
+        case 'lighting':
+          const lampPositions = [
+            { x: 20, y: 20 },
+            { x: roomWidth - productWidth - 20, y: 20 },
+            { x: 20, y: roomLength - productDepth - 20 },
+            { x: roomWidth - productWidth - 20, y: roomLength - productDepth - 20 },
+          ];
+          const pos = lampPositions[catIndex % lampPositions.length];
+          preferredX = pos.x;
+          preferredY = pos.y;
+          break;
+        case 'bookshelf':
+        case 'storage':
+          preferredX = roomWidth - productWidth - 20;
+          preferredY = 20;
           break;
         default:
-          x = 30 + (index % 3) * 100;
-          y = 30 + Math.floor(index / 3) * 100;
+          const col = index % 3;
+          const row = Math.floor(index / 3);
+          preferredX = 30 + col * (roomWidth / 3 - 20);
+          preferredY = 30 + row * (roomLength / 4);
       }
+
+      // Ensure preferred position is within bounds
+      preferredX = Math.max(10, Math.min(preferredX, roomWidth - productWidth - 10));
+      preferredY = Math.max(10, Math.min(preferredY, roomLength - productDepth - 10));
+
+      // Find valid non-overlapping position
+      const { x, y } = findValidPosition(preferredX, preferredY, productWidth, productDepth);
+
+      // Record this item's position for future collision checks
+      placedItems.push({ x, y, width: productWidth, height: productDepth });
 
       return {
         id: `${product.id}-${generateId()}`,
@@ -435,7 +536,7 @@ export default function Home() {
       <footer className="bg-white border-t border-slate-200 py-8 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-sm text-slate-500">
-            RoomCraft - AI-Powered Interior Design
+            Ave999Designs - Your AI interior design tool
           </p>
           <p className="text-xs text-slate-400 mt-1">
             Furniture from IKEA, Amazon, and Wayfair. Prices may vary.

@@ -1,7 +1,7 @@
 'use client';
 
-import { Product } from '@/types';
-import { formatPrice } from '@/lib/utils';
+import { Product, Country } from '@/types';
+import { formatPrice, getProductUrl } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 
@@ -11,6 +11,7 @@ interface ProductCardProps {
   onSelect?: () => void;
   onSwap?: () => void;
   compact?: boolean;
+  country?: Country;
 }
 
 export default function ProductCard({
@@ -19,7 +20,9 @@ export default function ProductCard({
   onSelect,
   onSwap,
   compact = false,
+  country = 'US',
 }: ProductCardProps) {
+  const productUrl = getProductUrl(product.productUrl, product.retailer, country);
   const retailerColors: Record<string, string> = {
     ikea: 'bg-blue-100 text-blue-700',
     amazon: 'bg-orange-100 text-orange-700',
@@ -37,7 +40,7 @@ export default function ProductCard({
             : 'border-slate-200 hover:border-slate-300 bg-white'
         )}
       >
-        {/* Product image placeholder */}
+        {/* Product color swatch */}
         <div
           className="w-12 h-12 rounded-lg flex-shrink-0"
           style={{ backgroundColor: product.color || '#e2e8f0' }}
@@ -83,7 +86,7 @@ export default function ProductCard({
           : 'border-slate-200 hover:border-slate-300 hover:shadow-md'
       )}
     >
-      {/* Product image */}
+      {/* Product color swatch */}
       <div
         className="h-32 w-full"
         style={{ backgroundColor: product.color || '#e2e8f0' }}
@@ -113,7 +116,7 @@ export default function ProductCard({
           </span>
 
           <a
-            href={product.productUrl}
+            href={productUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
