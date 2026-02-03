@@ -59,7 +59,7 @@ const initialRoomConfig: RoomConfig = {
   type: null,
   dimensions: null,
   style: null,
-  budget: 2000,
+  budget: 1000,
   country: 'US',
 };
 
