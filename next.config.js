@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
-  basePath: process.env.NODE_ENV === 'production' ? '/999_design' : '',
+  // Note: Remove 'output: export' to enable API routes for Vercel
+  // Static export doesn't support API routes
   images: {
     unoptimized: true,
     remotePatterns: [
@@ -19,7 +19,6 @@ const nextConfig = {
       },
     ],
   },
-  trailingSlash: true,
 };
 
 module.exports = nextConfig;
