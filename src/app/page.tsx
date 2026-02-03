@@ -148,13 +148,24 @@ export default function Home() {
       return false;
     };
 
+    // Check if item fits in room at all
+    const canFitInRoom = (width: number, height: number): boolean => {
+      return width <= roomWidth - 20 && height <= roomLength - 20;
+    };
+
     // Find a non-overlapping position, starting from preferred position
+    // Returns null if no valid position found
     const findValidPosition = (
       preferredX: number,
       preferredY: number,
       width: number,
       height: number
-    ): { x: number; y: number } => {
+    ): { x: number; y: number } | null => {
+      // Check if item is too big for the room
+      if (!canFitInRoom(width, height)) {
+        return null;
+      }
+
       // Try preferred position first
       if (!checkOverlap(preferredX, preferredY, width, height)) {
         return { x: preferredX, y: preferredY };
@@ -188,8 +199,8 @@ export default function Home() {
         }
       }
 
-      // Last resort: return preferred position (will overlap)
-      return { x: preferredX, y: preferredY };
+      // No valid position found - item won't fit
+      return null;
     };
 
     // Track category counts to offset items of the same type
@@ -267,19 +278,24 @@ export default function Home() {
       preferredY = Math.max(10, Math.min(preferredY, roomLength - productDepth - 10));
 
       // Find valid non-overlapping position
-      const { x, y } = findValidPosition(preferredX, preferredY, productWidth, productDepth);
+      const position = findValidPosition(preferredX, preferredY, productWidth, productDepth);
+
+      // Skip this item if no valid position found (room is full)
+      if (!position) {
+        return null;
+      }
 
       // Record this item's position for future collision checks
-      placedItems.push({ x, y, width: productWidth, height: productDepth });
+      placedItems.push({ x: position.x, y: position.y, width: productWidth, height: productDepth });
 
       return {
         id: `${product.id}-${generateId()}`,
         product,
-        positionX: x,
-        positionY: y,
+        positionX: position.x,
+        positionY: position.y,
         rotation: 0,
       };
-    });
+    }).filter((item): item is FurnitureItem => item !== null);
 
     setFurniture(furnitureItems);
     setCurrentStep(2);
