@@ -1,0 +1,45 @@
+Overview:
+
+A website that allows users to receive customized interior designs and furniture selections from specific retailers (Ikea, Amazon, Wayfair)
+
+
+Step 1: Customer provides inputs:
+
+-Select room type (bedroom, living room, office, den etc)
+
+-Take/upload photograph(s) of a room or provide room measurements
+
+-Select from 4 different styles (Contemporary, Traditional, Minimalist, Modern)
+
+-Select max budget ($2k, $3k, $5k, $10k, no budget….or enter an amount) 
+
+
+Step 2: Website would provide a list of selected furniture from the 3 retailers and a visual layout of the room with those furniture pieces. Next to the design would be a list of each included piece of furniture, the price of each piece, and the total purchase amount (before tax/shipping). 
+
+
+Step 3 (optional): The user can click on any furniture piece and a pop-up window will display other options that the user may prefer. The user can click on an alternative piece and the visual layout will update with the new selection.
+
+
+Step 4: The user can accept the final choices and all of the items will be loaded into the shopping cart of the retailer’s website.
+
+
+
+
+Comments: 
+
+-A single page or scrolling website might worth better than multiple pages
+
+-It would be nice to have all 3 retailers but even 1 would be fine
+
+-If more than 2 retailers, it would be nice to have the site mix and match furniture from multiple retailers. If too difficult, restricting all furniture recommendations to a single retailer would be fine (possibly 2 or 3 columns with each column showing recommended furniture from one singe retailer?)
+
+-It would be nice to have a toggle to select US or Canada where we can use furniture choices from Ikea, Amazon and Wayfair in the US or Ikea, Amazon and Wayfair in Canada. But one country is better than none. 
+
+
+Reference points:
+
+-enter the following into ChatGPT: 
+
+“Draw an interior design for a bedroom that measures 10 feet by 10 feet using furniture available from Ikea canada. Include a breakdown of cost per item.”
+
+-RoomGPT.io just generates room designs with types of furniture pieces and not specific items with prices. But the UI is nice.
