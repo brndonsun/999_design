@@ -1,4 +1,4 @@
-import { Product } from '@/types';
+import { Product, Retailer } from '@/types';
 
 // Multi-retailer furniture database
 // Uses search URLs for reliability - direct product links often break
@@ -513,30 +513,47 @@ export const sampleProducts: Product[] = [
   },
 ];
 
-// Get products filtered by room type, style, and budget
+// Get products filtered by room type, style, budget, and retailers.
+// Returns the single best (most expensive within budget) product per category
+// so the layout maximizes quality without duplication.
 export function getRecommendedProducts(
   roomType: string,
   style: string,
-  maxBudget: number
+  maxBudget: number,
+  retailers: Retailer[] = ['amazon', 'ikea', 'wayfair']
 ): Product[] {
-  return sampleProducts.filter((product) => {
+  const filtered = sampleProducts.filter((product) => {
     const matchesRoom = product.roomTypes.includes(roomType as any);
     const matchesStyle = product.styles.includes(style as any);
     const withinBudget = maxBudget === 0 || product.price <= maxBudget;
-    return matchesRoom && matchesStyle && withinBudget;
+    const matchesRetailer = retailers.includes(product.retailer);
+    return matchesRoom && matchesStyle && withinBudget && matchesRetailer;
   });
+
+  // Pick the most expensive (highest quality within budget) product per category
+  const byCategory = new Map<string, Product>();
+  for (const product of filtered) {
+    const existing = byCategory.get(product.category);
+    if (!existing || product.price > existing.price) {
+      byCategory.set(product.category, product);
+    }
+  }
+
+  return Array.from(byCategory.values()).sort((a, b) => b.price - a.price);
 }
 
 // Get alternative products for a given product
 export function getAlternatives(
   currentProduct: Product,
-  maxBudget: number
+  maxBudget: number,
+  retailers: Retailer[] = ['amazon', 'ikea', 'wayfair']
 ): Product[] {
   return sampleProducts.filter((product) => {
     const sameCategory = product.category === currentProduct.category;
     const differentProduct = product.id !== currentProduct.id;
     const withinBudget = maxBudget === 0 || product.price <= maxBudget;
-    return sameCategory && differentProduct && withinBudget;
+    const matchesRetailer = retailers.includes(product.retailer);
+    return sameCategory && differentProduct && withinBudget && matchesRetailer;
   });
 }
 

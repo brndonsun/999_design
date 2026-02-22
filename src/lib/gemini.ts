@@ -1,4 +1,4 @@
-import { Product, RoomType, DesignStyle } from '@/types';
+import { Product, RoomType, DesignStyle, Retailer } from '@/types';
 
 interface GeminiAnalysisResult {
   roomType: RoomType;
@@ -164,31 +164,26 @@ export function matchFurnitureToSuggestions(
   suggestions: GeminiAnalysisResult['suggestedFurniture'],
   products: Product[],
   budget: number,
-  style: DesignStyle
+  style: DesignStyle,
+  retailers: Retailer[] = ['amazon', 'ikea', 'wayfair']
 ): Product[] {
   const matched: Product[] = [];
+  // Per-item budget target: spread the total budget across all suggestions
+  const perItemBudget = budget === 0 ? Infinity : budget / suggestions.length;
 
   for (const suggestion of suggestions) {
-    // Find products matching the suggested category
+    // Find products matching the suggested category, style, and selected retailers
     const categoryMatches = products.filter(
       (p) =>
         p.category === suggestion.category &&
-        (budget === 0 || p.price <= budget / suggestions.length) &&
-        p.styles.includes(style)
+        (budget === 0 || p.price <= perItemBudget) &&
+        p.styles.includes(style) &&
+        retailers.includes(p.retailer)
     );
 
     if (categoryMatches.length > 0) {
-      // Sort by price and pick the best match
-      const sorted = categoryMatches.sort((a, b) => {
-        // Prefer products that match more styles
-        const aStyleMatch = a.styles.filter((s) => s === style).length;
-        const bStyleMatch = b.styles.filter((s) => s === style).length;
-        if (aStyleMatch !== bStyleMatch) return bStyleMatch - aStyleMatch;
-
-        // Then by price (mid-range preferred)
-        return a.price - b.price;
-      });
-
+      // Prefer the most expensive product within the per-item budget (maximizes quality)
+      const sorted = categoryMatches.sort((a, b) => b.price - a.price);
       matched.push(sorted[0]);
     }
   }

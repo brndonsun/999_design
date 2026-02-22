@@ -23,12 +23,14 @@ export async function POST(request: NextRequest) {
     // Match furniture suggestions to real products
     const style = preferences?.style || analysis.detectedStyle;
     const budget = preferences?.budget || 5000;
+    const retailers = preferences?.retailers || ['amazon', 'ikea', 'wayfair'];
 
     const recommendedProducts = matchFurnitureToSuggestions(
       analysis.suggestedFurniture,
       sampleProducts,
       budget,
-      style as DesignStyle
+      style as DesignStyle,
+      retailers
     );
 
     return NextResponse.json({

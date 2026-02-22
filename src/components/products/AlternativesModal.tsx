@@ -29,8 +29,8 @@ export default function AlternativesModal({
 
   const alternatives = useMemo(() => {
     if (!currentItem) return [];
-    return getAlternatives(currentItem.product, roomConfig.budget);
-  }, [currentItem, roomConfig.budget]);
+    return getAlternatives(currentItem.product, roomConfig.budget, roomConfig.retailers);
+  }, [currentItem, roomConfig.budget, roomConfig.retailers]);
 
   const handleSwap = () => {
     if (furnitureId && selectedAlternative) {

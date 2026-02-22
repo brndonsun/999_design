@@ -6,6 +6,7 @@ import {
   DesignStyle,
   RoomDimensions,
   Country,
+  Retailer,
   Product
 } from '@/types';
 
@@ -23,12 +24,18 @@ interface RoomState {
   currentStep: number;
   isGenerating: boolean;
 
+  // Visualization state
+  generatedImageUrl: string | null;
+  isVisualizationLoading: boolean;
+  visualizationError: string | null;
+
   // Actions - Room Config
   setRoomType: (type: RoomType) => void;
   setDimensions: (dimensions: RoomDimensions) => void;
   setStyle: (style: DesignStyle) => void;
   setBudget: (budget: number) => void;
   setCountry: (country: Country) => void;
+  setRetailers: (retailers: Retailer[]) => void;
   setPhotoUrl: (url: string) => void;
 
   // Actions - Furniture
@@ -48,6 +55,11 @@ interface RoomState {
   prevStep: () => void;
   setIsGenerating: (isGenerating: boolean) => void;
 
+  // Actions - Visualization
+  setGeneratedImageUrl: (url: string | null) => void;
+  setIsVisualizationLoading: (loading: boolean) => void;
+  setVisualizationError: (error: string | null) => void;
+
   // Computed
   getTotalCost: () => number;
 
@@ -61,6 +73,7 @@ const initialRoomConfig: RoomConfig = {
   style: null,
   budget: 2000,
   country: 'US',
+  retailers: ['amazon', 'ikea', 'wayfair'],
 };
 
 export const useRoomStore = create<RoomState>((set, get) => ({
@@ -69,6 +82,9 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   selectedFurnitureId: null,
   currentStep: 1,
   isGenerating: false,
+  generatedImageUrl: null,
+  isVisualizationLoading: false,
+  visualizationError: null,
 
   // Room Config Actions
   setRoomType: (type) => set((state) => ({
@@ -89,6 +105,10 @@ export const useRoomStore = create<RoomState>((set, get) => ({
 
   setCountry: (country) => set((state) => ({
     roomConfig: { ...state.roomConfig, country }
+  })),
+
+  setRetailers: (retailers) => set((state) => ({
+    roomConfig: { ...state.roomConfig, retailers }
   })),
 
   setPhotoUrl: (photoUrl) => set((state) => ({
@@ -146,6 +166,11 @@ export const useRoomStore = create<RoomState>((set, get) => ({
 
   setIsGenerating: (isGenerating) => set({ isGenerating }),
 
+  // Visualization Actions
+  setGeneratedImageUrl: (generatedImageUrl) => set({ generatedImageUrl }),
+  setIsVisualizationLoading: (isVisualizationLoading) => set({ isVisualizationLoading }),
+  setVisualizationError: (visualizationError) => set({ visualizationError }),
+
   // Computed
   getTotalCost: () => {
     const { furniture } = get();
@@ -159,5 +184,8 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     selectedFurnitureId: null,
     currentStep: 1,
     isGenerating: false,
+    generatedImageUrl: null,
+    isVisualizationLoading: false,
+    visualizationError: null,
   }),
 }));

@@ -57,6 +57,7 @@ export interface RoomConfig {
   style: DesignStyle | null;
   budget: number;
   country: Country;
+  retailers: Retailer[];
   photoUrl?: string;
 }
 
