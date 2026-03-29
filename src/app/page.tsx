@@ -11,15 +11,14 @@ import RetailerSelector from '@/components/design/RetailerSelector';
 import PhotoUpload from '@/components/room/PhotoUpload';
 import ProductList from '@/components/products/ProductList';
 import AlternativesModal from '@/components/products/AlternativesModal';
-import VisualizationModal from '@/components/room/VisualizationModal';
-import VisualizeButton from '@/components/room/VisualizeButton';
 import PriceSummary from '@/components/products/PriceSummary';
 import Button from '@/components/ui/Button';
 import { useRoomStore } from '@/store/roomStore';
 import { getRecommendedProducts } from '@/data/sampleProducts';
 import { generateId, inchesToPixels } from '@/lib/utils';
+import { buildVisualizationPrompt, buildVisualizationPromptWithPhoto } from '@/lib/imagen';
 import { FurnitureItem, Product } from '@/types';
-import { Wand2, ArrowRight, Loader2, Camera, Settings2, Sparkles } from 'lucide-react';
+import { Wand2, ArrowRight, Loader2, Camera, Settings2, Sparkles, LayoutGrid, Download, RefreshCw } from 'lucide-react';
 
 // Dynamic import for Konva (client-side only)
 const RoomCanvas = dynamic(() => import('@/components/room/RoomCanvas'), {
@@ -32,6 +31,7 @@ const RoomCanvas = dynamic(() => import('@/components/room/RoomCanvas'), {
 });
 
 type InputMode = 'photo' | 'manual';
+type ViewMode = 'visualization' | '2d-plan';
 
 interface AIAnalysis {
   roomType: string;
@@ -44,13 +44,13 @@ interface AIAnalysis {
 }
 
 export default function Home() {
-  const [inputMode, setInputMode] = useState<InputMode>('photo');
+  const [inputMode, setInputMode] = useState<InputMode>('manual');
+  const [viewMode, setViewMode] = useState<ViewMode>('visualization');
   const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [swapFurnitureId, setSwapFurnitureId] = useState<string | null>(null);
-  const [vizModalOpen, setVizModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [roomsCount, setRoomsCount] = useState(800);
 
@@ -80,6 +80,12 @@ export default function Home() {
     setStyle,
     setDimensions,
     setCurrentStep,
+    generatedImageUrl,
+    isVisualizationLoading,
+    setGeneratedImageUrl,
+    setIsVisualizationLoading,
+    setVisualizationError,
+    visualizationError,
   } = useRoomStore();
 
   const canGenerateManual =
@@ -88,6 +94,44 @@ export default function Home() {
     roomConfig.dimensions &&
     roomConfig.dimensions.width > 0 &&
     roomConfig.dimensions.length > 0;
+
+  // Visualize room inline (no modal)
+  const handleVisualizeRoom = async (items: FurnitureItem[]) => {
+    if (items.length === 0) return;
+    setIsVisualizationLoading(true);
+    setVisualizationError(null);
+    try {
+      const hasPhoto = !!roomConfig.photoUrl;
+      const prompt = hasPhoto
+        ? buildVisualizationPromptWithPhoto(roomConfig, items)
+        : buildVisualizationPrompt(roomConfig, items);
+      const body: { prompt: string; referenceImage?: string } = { prompt };
+      if (hasPhoto && roomConfig.photoUrl) {
+        body.referenceImage = roomConfig.photoUrl;
+      }
+      const response = await fetch('/api/visualize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Visualization failed');
+      setGeneratedImageUrl(`data:${data.mimeType};base64,${data.imageBase64}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Visualization failed';
+      setVisualizationError(message);
+    } finally {
+      setIsVisualizationLoading(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!generatedImageUrl) return;
+    const link = document.createElement('a');
+    link.href = generatedImageUrl;
+    link.download = `room-visualization-${Date.now()}.png`;
+    link.click();
+  };
 
   // Analyze photo with AI
   const handleAnalyzePhoto = async () => {
@@ -133,9 +177,12 @@ export default function Home() {
         });
       }
 
-      // Create furniture items from recommendations
+      // Create furniture items from recommendations then auto-visualize
       if (data.recommendations && data.recommendations.length > 0) {
-        createFurnitureLayout(data.recommendations);
+        const items = createFurnitureLayout(data.recommendations);
+        setViewMode('visualization');
+        setGeneratedImageUrl(null);
+        handleVisualizeRoom(items);
       }
     } catch (err) {
       console.error('Analysis error:', err);
@@ -145,8 +192,8 @@ export default function Home() {
     }
   };
 
-  // Create furniture layout from products
-  const createFurnitureLayout = (products: Product[]) => {
+  // Create furniture layout from products — returns the items for immediate use
+  const createFurnitureLayout = (products: Product[]): FurnitureItem[] => {
     const dims = roomConfig.dimensions || { width: 12, length: 14 };
     const roomWidth = dims.width * 30;
     const roomLength = dims.length * 30;
@@ -154,9 +201,8 @@ export default function Home() {
     // Track placed items for collision detection
     const placedItems: { x: number; y: number; width: number; height: number }[] = [];
 
-    // Check if a position overlaps with any placed item
     const checkOverlap = (x: number, y: number, width: number, height: number): boolean => {
-      const padding = 10; // Minimum gap between items
+      const padding = 10;
       for (const item of placedItems) {
         if (
           x < item.x + item.width + padding &&
@@ -170,49 +216,33 @@ export default function Home() {
       return false;
     };
 
-    // Check if item fits in room at all
     const canFitInRoom = (width: number, height: number): boolean => {
       return width <= roomWidth - 20 && height <= roomLength - 20;
     };
 
-    // Find a non-overlapping position, starting from preferred position
-    // Returns null if no valid position found
     const findValidPosition = (
       preferredX: number,
       preferredY: number,
       width: number,
       height: number
     ): { x: number; y: number } | null => {
-      // Check if item is too big for the room
-      if (!canFitInRoom(width, height)) {
-        return null;
-      }
-
-      // Try preferred position first
+      if (!canFitInRoom(width, height)) return null;
       if (!checkOverlap(preferredX, preferredY, width, height)) {
         return { x: preferredX, y: preferredY };
       }
-
-      // Search in expanding squares around preferred position
       const step = 30;
       for (let radius = step; radius < Math.max(roomWidth, roomLength); radius += step) {
-        // Try positions around the perimeter at this radius
         for (let dx = -radius; dx <= radius; dx += step) {
           for (let dy = -radius; dy <= radius; dy += step) {
-            // Only check perimeter positions
             if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-
             const testX = Math.max(10, Math.min(preferredX + dx, roomWidth - width - 10));
             const testY = Math.max(10, Math.min(preferredY + dy, roomLength - height - 10));
-
             if (!checkOverlap(testX, testY, width, height)) {
               return { x: testX, y: testY };
             }
           }
         }
       }
-
-      // Fallback: grid search
       for (let gx = 10; gx < roomWidth - width - 10; gx += step) {
         for (let gy = 10; gy < roomLength - height - 10; gy += step) {
           if (!checkOverlap(gx, gy, width, height)) {
@@ -220,19 +250,15 @@ export default function Home() {
           }
         }
       }
-
-      // No valid position found - item won't fit
       return null;
     };
 
-    // Track category counts to offset items of the same type
     const categoryCount: Record<string, number> = {};
 
-    const furnitureItems: FurnitureItem[] = products.slice(0, 8).map((product, index) => {
+    const furnitureItems: FurnitureItem[] = products.slice(0, 12).map((product, index) => {
       const productWidth = inchesToPixels(product.width);
       const productDepth = inchesToPixels(product.depth);
 
-      // Get and increment the count for this category
       const catIndex = categoryCount[product.category] || 0;
       categoryCount[product.category] = catIndex + 1;
 
@@ -272,7 +298,7 @@ export default function Home() {
           preferredX = (roomWidth - productWidth) / 2;
           preferredY = (roomLength - productDepth) / 2;
           break;
-        case 'lighting':
+        case 'lighting': {
           const lampPositions = [
             { x: 20, y: 20 },
             { x: roomWidth - productWidth - 20, y: 20 },
@@ -283,31 +309,26 @@ export default function Home() {
           preferredX = pos.x;
           preferredY = pos.y;
           break;
+        }
         case 'bookshelf':
         case 'storage':
           preferredX = roomWidth - productWidth - 20;
           preferredY = 20;
           break;
-        default:
+        default: {
           const col = index % 3;
           const row = Math.floor(index / 3);
           preferredX = 30 + col * (roomWidth / 3 - 20);
           preferredY = 30 + row * (roomLength / 4);
+        }
       }
 
-      // Ensure preferred position is within bounds
       preferredX = Math.max(10, Math.min(preferredX, roomWidth - productWidth - 10));
       preferredY = Math.max(10, Math.min(preferredY, roomLength - productDepth - 10));
 
-      // Find valid non-overlapping position
       const position = findValidPosition(preferredX, preferredY, productWidth, productDepth);
+      if (!position) return null;
 
-      // Skip this item if no valid position found (room is full)
-      if (!position) {
-        return null;
-      }
-
-      // Record this item's position for future collision checks
       placedItems.push({ x: position.x, y: position.y, width: productWidth, height: productDepth });
 
       return {
@@ -321,13 +342,15 @@ export default function Home() {
 
     setFurniture(furnitureItems);
     setCurrentStep(2);
+    return furnitureItems;
   };
 
-  // Manual generation
+  // Manual generation — auto-triggers visualization after layout
   const handleGenerateDesign = async () => {
     if (!canGenerateManual) return;
 
     setIsGenerating(true);
+    setGeneratedImageUrl(null);
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const products = getRecommendedProducts(
@@ -337,8 +360,12 @@ export default function Home() {
       roomConfig.retailers
     );
 
-    createFurnitureLayout(products);
+    const items = createFurnitureLayout(products);
     setIsGenerating(false);
+    setViewMode('visualization');
+    if (items.length > 0) {
+      handleVisualizeRoom(items);
+    }
   };
 
   const handleSwapClick = (furnitureId: string) => {
@@ -357,7 +384,7 @@ export default function Home() {
             Design Your Perfect Room
           </h2>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            Upload a photo of your room and get AI-powered furniture recommendations
+            Enter your room dimensions and get AI-powered furniture recommendations
             from IKEA, Amazon, and Wayfair.
           </p>
         </section>
@@ -373,9 +400,20 @@ export default function Home() {
             </h3>
           </div>
 
-          {/* Mode toggle */}
+          {/* Mode toggle — Enter Dimensions is default/first */}
           <div className="flex justify-center mb-8">
             <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-white">
+              <button
+                onClick={() => setInputMode('manual')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  inputMode === 'manual'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Settings2 className="h-4 w-4" />
+                Enter Dimensions
+              </button>
               <button
                 onClick={() => setInputMode('photo')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
@@ -386,17 +424,6 @@ export default function Home() {
               >
                 <Camera className="h-4 w-4" />
                 Upload Photo
-              </button>
-              <button
-                onClick={() => setInputMode('manual')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  inputMode === 'manual'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Settings2 className="h-4 w-4" />
-                Manual Setup
               </button>
             </div>
           </div>
@@ -488,7 +515,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* Manual setup mode */}
+          {/* Enter Dimensions mode */}
           {inputMode === 'manual' && (
             <div className="grid md:grid-cols-2 gap-8">
               <div className="space-y-8">
@@ -540,13 +567,89 @@ export default function Home() {
                   Your Room Design
                 </h3>
               </div>
-              <VisualizeButton onComplete={() => setVizModalOpen(true)} />
+
+              {/* View mode toggle */}
+              <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-white">
+                <button
+                  onClick={() => setViewMode('visualization')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    viewMode === 'visualization'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Visualize Room
+                </button>
+                <button
+                  onClick={() => setViewMode('2d-plan')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    viewMode === '2d-plan'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                  2D Plan
+                </button>
+              </div>
             </div>
 
             <div className="grid lg:grid-cols-3 gap-8">
-              {/* Canvas */}
+              {/* Main view */}
               <div className="lg:col-span-2">
-                <RoomCanvas />
+                {viewMode === 'visualization' ? (
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    {isVisualizationLoading ? (
+                      <div className="w-full h-96 flex flex-col items-center justify-center gap-3 bg-slate-50">
+                        <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
+                        <p className="text-slate-500 text-sm">Generating room visualization...</p>
+                      </div>
+                    ) : generatedImageUrl ? (
+                      <>
+                        <img
+                          src={generatedImageUrl}
+                          alt="AI-generated room visualization"
+                          className="w-full"
+                        />
+                        <div className="flex gap-2 p-3 border-t border-slate-100">
+                          <button
+                            onClick={() => handleVisualizeRoom(furniture)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Regenerate
+                          </button>
+                          <button
+                            onClick={handleDownload}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Download
+                          </button>
+                        </div>
+                      </>
+                    ) : visualizationError ? (
+                      <div className="w-full h-96 flex flex-col items-center justify-center gap-3 bg-slate-50 p-6">
+                        <p className="text-red-500 text-sm text-center">{visualizationError}</p>
+                        <button
+                          onClick={() => handleVisualizeRoom(furniture)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Try Again
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-full h-96 flex flex-col items-center justify-center gap-3 bg-slate-50">
+                        <Sparkles className="h-8 w-8 text-slate-300" />
+                        <p className="text-slate-400 text-sm">Visualization will appear here</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <RoomCanvas />
+                )}
               </div>
 
               {/* Product list */}
@@ -603,12 +706,6 @@ export default function Home() {
           setSwapFurnitureId(null);
         }}
         furnitureId={swapFurnitureId}
-      />
-
-      {/* Visualization Modal */}
-      <VisualizationModal
-        isOpen={vizModalOpen}
-        onClose={() => setVizModalOpen(false)}
       />
     </div>
   );

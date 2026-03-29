@@ -31,7 +31,7 @@ interface RoomState {
 
   // Actions - Room Config
   setRoomType: (type: RoomType) => void;
-  setDimensions: (dimensions: RoomDimensions) => void;
+  setDimensions: (dimensions: RoomDimensions | null) => void;
   setStyle: (style: DesignStyle) => void;
   setBudget: (budget: number) => void;
   setCountry: (country: Country) => void;

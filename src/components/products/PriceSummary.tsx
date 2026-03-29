@@ -81,21 +81,7 @@ export default function PriceSummary() {
     const items = selectedByRetailer[retailer];
     if (!items || items.length === 0) return;
 
-    // Amazon has a special "add to cart" URL format
-    if (retailer === 'amazon') {
-      const baseUrl = roomConfig.country === 'CA'
-        ? 'https://www.amazon.ca/gp/aws/cart/add.html?'
-        : 'https://www.amazon.com/gp/aws/cart/add.html?';
-
-      const params = items.map((item, index) =>
-        `ASIN.${index + 1}=${item.product.externalId}&Quantity.${index + 1}=1`
-      ).join('&');
-
-      window.open(baseUrl + params, '_blank');
-      return;
-    }
-
-    // For other retailers, open each product page
+    // Open each product page directly
     items.forEach((item) => {
       const url = getProductUrl(item.product.productUrl, item.product.retailer, roomConfig.country);
       window.open(url, '_blank');
@@ -270,10 +256,7 @@ export default function PriceSummary() {
               disabled={isDisabled}
             >
               <ShoppingBag className="h-4 w-4 mr-2" />
-              {retailer === 'amazon'
-                ? `Add to Amazon Cart (${selectedCount})`
-                : `Shop ${retailerInfo[retailer as Retailer].name} Items (${selectedCount})`
-              }
+              {`Shop ${retailerInfo[retailer as Retailer].name} Items (${selectedCount})`}
               <ExternalLink className="h-4 w-4 ml-2" />
             </Button>
           );
@@ -281,7 +264,7 @@ export default function PriceSummary() {
       </div>
 
       <p className="text-xs text-slate-400 text-center mt-4">
-        Amazon items can be added directly to your cart. IKEA/Wayfair open search results.
+        Opens product pages — add items to your cart directly on each retailer's site.
       </p>
     </div>
   );

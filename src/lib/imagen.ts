@@ -58,13 +58,12 @@ export function buildVisualizationPrompt(
     ? `The room measures approximately ${dims.width}" wide by ${dims.length}" long${dims.height ? ` with ${dims.height}" ceilings` : ''}.`
     : '';
 
-  return `Generate a photorealistic interior design photo of a ${style} ${roomType}. ${dimStr}
+  return `Generate a photorealistic interior design photo of a fully-furnished ${style} ${roomType}. ${dimStr}
 
-
-The room contains exactly these furniture pieces:
+The room must contain ALL of these furniture pieces — every single item listed below should appear in the scene:
 ${furnitureDetails}
 
-Each piece of furniture must be clearly visible and recognizable in the image. Match the described colors and proportions as closely as possible. Show the room from a natural eye-level corner perspective with warm, inviting natural light from windows. The result should look like a professional interior design magazine photograph — no text, no labels, no watermarks.`;
+Do not omit any items. The room should feel fully furnished and lived-in, with each piece placed naturally. Match the described colors and proportions as closely as possible. Fill the space with appropriate accessories and decor (throw pillows, plants, artwork, curtains, decorative objects) to make the room feel complete and styled. Show the room from a natural eye-level corner perspective with warm, inviting natural light from windows. The result should look like a professional interior design magazine photograph — no text, no labels, no watermarks.`;
 }
 
 export function buildVisualizationPromptWithPhoto(
@@ -81,10 +80,10 @@ export function buildVisualizationPromptWithPhoto(
 
 The target design style is ${style}: ${styleDesc}.
 
-Replace the existing furniture with exactly these pieces:
+Replace the existing furniture with ALL of these pieces — every item listed must appear in the scene:
 ${furnitureDetails}
 
-Keep the room's architecture (walls, windows, doors, floor plan) the same as the reference photo but completely update the furniture, decor, wall colors, and styling to match the ${style} aesthetic. Each piece must be clearly visible and match the described colors/proportions. Natural lighting, professional interior design magazine quality — no text, no labels, no watermarks.`;
+Do not omit any items. The room should feel fully furnished and complete. Add coordinating accessories and decor (throw pillows, plants, artwork, curtains, decorative objects) that complement the ${style} aesthetic. Keep the room's architecture (walls, windows, doors, floor plan) the same as the reference photo but completely update the furniture, decor, wall colors, and styling. Each piece must be clearly visible and match the described colors/proportions. Natural lighting, professional interior design magazine quality — no text, no labels, no watermarks.`;
 }
 
 export async function generateRoomImage(
